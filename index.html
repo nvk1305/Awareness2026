@@ -138,6 +138,9 @@
   <div class="card">
     <h2>Your QR Code</h2>
     <p class="sub">Click the button to generate your unique 4-digit QR code and show at registration desk. It stays valid on this device for 12 hours.</p>
+    <p class="sub" style="color:var(--brick);font-weight:bold;">
+      Use normal browsing mode - Incognito/Private mode will not save your code.
+    </p>
 
     <div id="qrBox"><span id="qrCode"></span></div>
     <div id="qrNumber"></div>
@@ -145,7 +148,6 @@
 
     <button id="generateBtn">Generate My QR Code</button>
     <div id="expiresAt"></div>
-    <div id="debugInfo" style="margin-top:10px;font-size:0.65rem;color:var(--steel);word-break:break-all;"></div>
   </div>
 
   <script>
@@ -335,10 +337,6 @@
 
     async function init() {
       var deviceId = getDeviceId();
-      var debugEl = document.getElementById("debugInfo");
-      if (debugEl) {
-        debugEl.textContent = "Device ID: " + deviceId + " | localStorage available: " + (typeof Storage !== "undefined");
-      }
       var local = loadLocalRecord();
       if (local && msRemaining(local) > 0) {
         // Optimistically show the locally cached code, then confirm
