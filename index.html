@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Unique QR Code</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --sync-gold: #f2bf00;
+      --sync-gold-70: #f6d866;
+      --sync-gold-20: #f8edc4;
+      --charcoal: #474844;
+      --charcoal-dark: #272825;
+      --steel: #9da0a4;
+      --teal: #426f89;
+      --brick: #c83527;
+      --dark-green: #41892c;
+    }
+    html { min-height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Courier New", "Lucida Console", monospace;
+      background-color: var(--charcoal-dark);
+      background-image:
+        linear-gradient(90deg, rgba(157, 160, 164, 0.25) 1px, transparent 1px),
+        linear-gradient(rgba(157, 160, 164, 0.25) 1px, transparent 1px),
+        linear-gradient(180deg, var(--charcoal-dark) 0%, var(--charcoal) 60%, var(--charcoal-dark) 100%);
+      background-size: 20px 20px, 20px 20px, 100% 100%;
+      background-attachment: fixed;
+      color: var(--sync-gold-20);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      background: rgba(39, 40, 37, 0.9);
+      border: 2px solid var(--sync-gold);
+      border-radius: 12px;
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: 6px 6px 0 var(--charcoal-dark);
+    }
+    h1 {
+      margin: 0 0 8px;
+      color: var(--sync-gold);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-size: 1.4rem;
+    }
+    p.sub {
+      margin: 0 0 24px;
+      color: var(--steel);
+      font-size: 0.9rem;
+    }
+    #qrBox {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 200px;
+      margin-bottom: 16px;
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    #qrBox img, #qrBox canvas { display: block; }
+    #qrCode { display: inline-block; }
+    #qrNumber {
+      font-size: 1.3rem;
+      letter-spacing: 3px;
+      color: var(--sync-gold);
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+    #statusMsg {
+      font-size: 0.85rem;
+      color: var(--sync-gold-70);
+      min-height: 1.2em;
+      margin-bottom: 20px;
+    }
+    button {
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--charcoal-dark);
+      background: var(--sync-gold);
+      border: none;
+      border-radius: 8px;
+      padding: 14px 28px;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 var(--charcoal-dark);
+      transition: transform 120ms ease;
+    }
+    button:disabled {
+      background: var(--steel);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    button:not(:disabled):hover {
+      transform: translateY(-2px);
+    }
+    #expiresAt {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: var(--steel);
+    }
+    .error {
+      color: var(--brick);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Your Personal QR Code</h1>
+    <p class="sub">Click the button to generate your unique numbered QR code. It stays valid on this device for 12 hours.</p>
+
+    <div id="qrBox"><span id="qrCode"></span></div>
+    <div id="qrNumber"></div>
+    <div id="statusMsg"></div>
+
+    <button id="generateBtn">Generate My QR Code</button>
+    <div id="expiresAt"></div>
+  </div>
+
+  <script>
+    // ----- Config -----
+    var VALID_HOURS = 12;
+    var VALID_MS = VALID_HOURS * 60 * 60 * 1000;
+    var STORAGE_KEY = "syncAwarenessQrData";
+
+    var qrCodeEl = document.getElementById("qrCode");
+    var qrNumberEl = document.getElementById("qrNumber");
+    var statusEl = document.getElementById("statusMsg");
+    var btn = document.getElementById("generateBtn");
+    var expiresAtEl = document.getElementById("expiresAt");
+    var qrInstance = null;
+    var countdownTimer = null;
+
+    function formatNumber(n) {
+      return String(n).padStart(9, "0");
+    }
+
+    function renderQr(number) {
+      qrCodeEl.innerHTML = "";
+      qrInstance = new QRCode(qrCodeEl, {
+        text: String(number),
+        width: 200,
+        height: 200,
+        colorDark: "#272825",
+        colorLight: "#ffffff"
+      });
+      qrNumberEl.textContent = formatNumber(number);
+    }
+
+    function saveRecord(number, issuedAt) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ number: number, issuedAt: issuedAt }));
+    }
+
+    function loadRecord() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function msRemaining(record) {
+      return record.issuedAt + VALID_MS - Date.now();
+    }
+
+    function startCountdown(record) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      function tick() {
+        var remaining = msRemaining(record);
+        if (remaining <= 0) {
+          clearInterval(countdownTimer);
+          lockToState({ active: false });
+          return;
+        }
+        var h = Math.floor(remaining / 3600000);
+        var m = Math.floor((remaining % 3600000) / 60000);
+        var s = Math.floor((remaining % 60000) / 1000);
+        expiresAtEl.textContent =
+          "Valid for " + h + "h " + m + "m " + s + "s on this device";
+      }
+      tick();
+      countdownTimer = setInterval(tick, 1000);
+    }
+
+    function lockToState(opts) {
+      if (opts.active) {
+        btn.disabled = true;
+        statusEl.textContent = "This QR code is already active on your device.";
+        statusEl.classList.remove("error");
+      } else {
+        btn.disabled = false;
+        statusEl.textContent = "Your previous code expired. Generate a new one.";
+        expiresAtEl.textContent = "";
+        qrCodeEl.innerHTML = "";
+        qrNumberEl.textContent = "";
+      }
+    }
+
+    // Generates a 9-digit number using the browser's cryptographic RNG.
+    // No backend/API call is required, so the page stays fully static and
+    // free to host. Collision odds across devices are astronomically low
+    // (~1 in 900 million), and each device only ever holds one active code
+    // at a time thanks to the 12-hour localStorage lock below.
+    function generateUniqueNumber() {
+      var buf = new Uint32Array(1);
+      window.crypto.getRandomValues(buf);
+      return 100000000 + (buf[0] % 900000000);
+    }
+
+    function handleGenerate() {
+      var existing = loadRecord();
+      if (existing && msRemaining(existing) > 0) {
+        renderQr(existing.number);
+        startCountdown(existing);
+        lockToState({ active: true });
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = "Generating your unique code...";
+      statusEl.classList.remove("error");
+
+      try {
+        var number = generateUniqueNumber();
+        var issuedAt = Date.now();
+        saveRecord(number, issuedAt);
+        renderQr(number);
+        var record = { number: number, issuedAt: issuedAt };
+        startCountdown(record);
+        lockToState({ active: true });
+      } catch (err) {
+        statusEl.textContent = "Could not generate a code. Please try again.";
+        statusEl.classList.add("error");
+        btn.disabled = false;
+      }
+    }
+
+    function init() {
+      var existing = loadRecord();
+      if (existing && msRemaining(existing) > 0) {
+        renderQr(existing.number);
+        startCountdown(existing);
+        lockToState({ active: true });
+      } else {
+        statusEl.textContent = "";
+      }
+    }
+
+    btn.addEventListener("click", handleGenerate);
+    init();
+  </script>
+</body>
+</html>
