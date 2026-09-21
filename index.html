@@ -141,6 +141,9 @@
     <p class="sub" style="color:var(--brick);font-weight:bold;">
       Use normal browsing mode - Incognito/Private mode will not save your code.
     </p>
+    <p id="storageWarning" class="sub" style="display:none;color:var(--brick);font-weight:bold;">
+      Your browser is blocking site data storage. On iPhone: Settings &gt; Safari &gt; Advanced &gt; Privacy &amp; Security &gt; turn OFF "Block All Cookies", then reload this page.
+    </p>
 
     <div id="qrBox"><span id="qrCode"></span></div>
     <div id="qrNumber"></div>
@@ -172,13 +175,30 @@
     var qrInstance = null;
     var countdownTimer = null;
 
-    function getDeviceId() {
-      var id = localStorage.getItem(DEVICE_KEY);
-      if (!id) {
-        id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-        localStorage.setItem(DEVICE_KEY, id);
+    // Returns null if localStorage is unavailable/blocked (e.g. iOS Safari
+    // "Block All Cookies", which also disables Web Storage in WebKit).
+    function isStorageAvailable() {
+      try {
+        var testKey = "__storageTest__";
+        localStorage.setItem(testKey, "1");
+        localStorage.removeItem(testKey);
+        return true;
+      } catch (e) {
+        return false;
       }
-      return id;
+    }
+
+    function getDeviceId() {
+      try {
+        var id = localStorage.getItem(DEVICE_KEY);
+        if (!id) {
+          id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+          localStorage.setItem(DEVICE_KEY, id);
+        }
+        return id;
+      } catch (e) {
+        return null;
+      }
     }
 
     function formatNumber(n) {
@@ -295,6 +315,10 @@
     }
 
     async function handleGenerate() {
+      if (!isStorageAvailable()) {
+        document.getElementById("storageWarning").style.display = "block";
+        return;
+      }
       var deviceId = getDeviceId();
 
       btn.disabled = true;
@@ -336,6 +360,11 @@
     }
 
     async function init() {
+      if (!isStorageAvailable()) {
+        document.getElementById("storageWarning").style.display = "block";
+        btn.disabled = true;
+        return;
+      }
       var deviceId = getDeviceId();
       var local = loadLocalRecord();
       if (local && msRemaining(local) > 0) {
