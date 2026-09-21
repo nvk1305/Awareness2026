@@ -154,14 +154,12 @@
     var STORAGE_KEY = "syncAwarenessQrData";
     var DEVICE_KEY = "syncAwarenessDeviceId";
 
-    // Shared cloud store (jsonbin.io) so the admin page can see/delete
-    // codes from every device. Use a bin-scoped Access Key with only
-    // Read+Update permissions (NOT the account Master Key) - this key is
-    // visible to anyone who views page source, so it must not grant
-    // account-wide or delete access.
-    var JSONBIN_BIN_ID = "6ab12df9ffd5d160531f6688";
-    var JSONBIN_ACCESS_KEY = "$2a$10$hgRmgUuY.XhiAtduPVP8aOB4jnQmdUoDDrjZjEwxCSebH3qpWiTVa";
-    var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+    // Shared cloud store (Firebase Realtime Database) so the admin page
+    // can see/delete codes from every device. Each device writes only to
+    // its own key (records/<deviceId>), so there's no read-modify-write
+    // race condition. Security is enforced by the DB rules on the Firebase
+    // side (see setup notes), not by a secret embedded here.
+    var FIREBASE_DB_URL = "https://YOUR_PROJECT-default-rtdb.firebaseio.com";
 
     var qrCodeEl = document.getElementById("qrCode");
     var qrNumberEl = document.getElementById("qrNumber");
@@ -214,24 +212,22 @@
     }
 
     async function fetchAllRecords() {
-      var res = await fetch(JSONBIN_BASE + "/latest", {
-        headers: { "X-Access-Key": JSONBIN_ACCESS_KEY, "X-Bin-Meta": "false" },
-        cache: "no-store"
-      });
+      var res = await fetch(FIREBASE_DB_URL + "/records.json", { cache: "no-store" });
       if (!res.ok) throw new Error("Unable to reach shared store");
       var data = await res.json();
-      var wrapper = (data && data.record) ? data.record : data;
-      return Array.isArray(wrapper.records) ? wrapper.records : [];
+      if (!data) return [];
+      return Object.keys(data).map(function (deviceId) {
+        return { deviceId: deviceId, number: data[deviceId].number, issuedAt: data[deviceId].issuedAt };
+      });
     }
 
-    async function saveAllRecords(records) {
-      var res = await fetch(JSONBIN_BASE, {
+    // Writes only this device's own node - no read-modify-write, so
+    // concurrent generations from other devices can't clobber each other.
+    async function saveRecord(deviceId, record) {
+      var res = await fetch(FIREBASE_DB_URL + "/records/" + deviceId + ".json", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Access-Key": JSONBIN_ACCESS_KEY
-        },
-        body: JSON.stringify({ records: records })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ number: record.number, issuedAt: record.issuedAt })
       });
       if (!res.ok) throw new Error("Unable to save to shared store");
     }
@@ -322,8 +318,7 @@
         var issuedAt = now;
         var record = { number: number, issuedAt: issuedAt, deviceId: deviceId };
 
-        var pruned = active.concat([record]); // drop expired entries, keep active + new
-        await saveAllRecords(pruned);
+        await saveRecord(deviceId, record);
 
         saveLocalRecord(number, issuedAt);
         renderQr(number);

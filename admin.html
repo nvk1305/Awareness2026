@@ -123,9 +123,7 @@
     // ----- Config (must match index.html) -----
     var VALID_HOURS = 12;
     var VALID_MS = VALID_HOURS * 60 * 60 * 1000;
-    var JSONBIN_BIN_ID = "6ab12df9ffd5d160531f6688";
-    var JSONBIN_ACCESS_KEY = "$2a$10$hgRmgUuY.XhiAtduPVP8aOB4jnQmdUoDDrjZjEwxCSebH3qpWiTVa";
-    var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+    var FIREBASE_DB_URL = "https://YOUR_PROJECT-default-rtdb.firebaseio.com";
 
     // SHA-256 hash of the admin password (default password: Awareness2026!).
     // This is a client-side convenience gate only - NOT real security, since
@@ -150,26 +148,18 @@
     }
 
     async function fetchAllRecords() {
-      var res = await fetch(JSONBIN_BASE + "/latest", {
-        headers: { "X-Access-Key": JSONBIN_ACCESS_KEY, "X-Bin-Meta": "false" },
-        cache: "no-store"
-      });
+      var res = await fetch(FIREBASE_DB_URL + "/records.json", { cache: "no-store" });
       if (!res.ok) throw new Error("Unable to reach shared store");
       var data = await res.json();
-      var wrapper = (data && data.record) ? data.record : data;
-      return Array.isArray(wrapper.records) ? wrapper.records : [];
+      if (!data) return [];
+      return Object.keys(data).map(function (deviceId) {
+        return { deviceId: deviceId, number: data[deviceId].number, issuedAt: data[deviceId].issuedAt };
+      });
     }
 
-    async function saveAllRecords(records) {
-      var res = await fetch(JSONBIN_BASE, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Access-Key": JSONBIN_ACCESS_KEY
-        },
-        body: JSON.stringify({ records: records })
-      });
-      if (!res.ok) throw new Error("Unable to save to shared store");
+    async function deleteRecord(deviceId) {
+      var res = await fetch(FIREBASE_DB_URL + "/records/" + deviceId + ".json", { method: "DELETE" });
+      if (!res.ok) throw new Error("Unable to delete from shared store");
     }
 
     function formatDateTime(ms) {
@@ -210,9 +200,7 @@
       msgEl.textContent = "Deleting...";
       msgEl.classList.remove("error");
       try {
-        var records = await fetchAllRecords();
-        var remaining = records.filter(function (r) { return r.deviceId !== deviceId; });
-        await saveAllRecords(remaining);
+        await deleteRecord(deviceId);
         await renderTable();
       } catch (err) {
         console.error(err);
