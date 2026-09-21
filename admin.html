@@ -123,8 +123,8 @@
     // ----- Config (must match index.html) -----
     var VALID_HOURS = 12;
     var VALID_MS = VALID_HOURS * 60 * 60 * 1000;
-    var JSONBIN_BIN_ID = "YOUR_BIN_ID_HERE";
-    var JSONBIN_ACCESS_KEY = "YOUR_ACCESS_KEY_HERE";
+    var JSONBIN_BIN_ID = "6ab12df9ffd5d160531f6688";
+    var JSONBIN_ACCESS_KEY = "$2a$10$hgRmgUuY.XhiAtduPVP8aOB4jnQmdUoDDrjZjEwxCSebH3qpWiTVa";
     var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 
     // SHA-256 hash of the admin password (default password: Awareness2026!).
@@ -156,7 +156,8 @@
       });
       if (!res.ok) throw new Error("Unable to reach shared store");
       var data = await res.json();
-      return Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+      var wrapper = (data && data.record) ? data.record : data;
+      return Array.isArray(wrapper.records) ? wrapper.records : [];
     }
 
     async function saveAllRecords(records) {
@@ -166,7 +167,7 @@
           "Content-Type": "application/json",
           "X-Access-Key": JSONBIN_ACCESS_KEY
         },
-        body: JSON.stringify(records)
+        body: JSON.stringify({ records: records })
       });
       if (!res.ok) throw new Error("Unable to save to shared store");
     }

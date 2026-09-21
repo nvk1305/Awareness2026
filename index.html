@@ -159,8 +159,8 @@
     // Read+Update permissions (NOT the account Master Key) - this key is
     // visible to anyone who views page source, so it must not grant
     // account-wide or delete access.
-    var JSONBIN_BIN_ID = "YOUR_BIN_ID_HERE";
-    var JSONBIN_ACCESS_KEY = "YOUR_ACCESS_KEY_HERE";
+    var JSONBIN_BIN_ID = "6ab12df9ffd5d160531f6688";
+    var JSONBIN_ACCESS_KEY = "$2a$10$hgRmgUuY.XhiAtduPVP8aOB4jnQmdUoDDrjZjEwxCSebH3qpWiTVa";
     var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 
     var qrCodeEl = document.getElementById("qrCode");
@@ -220,7 +220,8 @@
       });
       if (!res.ok) throw new Error("Unable to reach shared store");
       var data = await res.json();
-      return Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+      var wrapper = (data && data.record) ? data.record : data;
+      return Array.isArray(wrapper.records) ? wrapper.records : [];
     }
 
     async function saveAllRecords(records) {
@@ -230,7 +231,7 @@
           "Content-Type": "application/json",
           "X-Access-Key": JSONBIN_ACCESS_KEY
         },
-        body: JSON.stringify(records)
+        body: JSON.stringify({ records: records })
       });
       if (!res.ok) throw new Error("Unable to save to shared store");
     }
