@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Admin - India Cybersecurity Awareness Month 2026</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --sync-gold: #f2bf00;
+      --sync-gold-70: #f6d866;
+      --sync-gold-20: #f8edc4;
+      --charcoal: #474844;
+      --charcoal-dark: #272825;
+      --steel: #9da0a4;
+      --brick: #c83527;
+      --dark-green: #41892c;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Courier New", "Lucida Console", monospace;
+      background: var(--charcoal-dark);
+      color: var(--sync-gold-20);
+      padding: 24px;
+    }
+    h1 {
+      color: var(--sync-gold);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 1.4rem;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    #loginBox {
+      max-width: 340px;
+      margin: 60px auto;
+      background: rgba(39, 40, 37, 0.9);
+      border: 2px solid var(--sync-gold);
+      border-radius: 12px;
+      padding: 28px 24px;
+      text-align: center;
+    }
+    input {
+      font-family: inherit;
+      width: 100%;
+      padding: 10px;
+      margin: 12px 0;
+      border-radius: 6px;
+      border: 1px solid var(--steel);
+      background: var(--charcoal);
+      color: var(--sync-gold-20);
+    }
+    button {
+      font-family: inherit;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--charcoal-dark);
+      background: var(--sync-gold);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    button.danger {
+      background: var(--brick);
+      color: #fff;
+    }
+    #dashboard { display: none; max-width: 900px; margin: 0 auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(39, 40, 37, 0.9);
+      border: 1px solid var(--sync-gold);
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--steel);
+      font-size: 0.9rem;
+    }
+    th { color: var(--sync-gold); text-transform: uppercase; }
+    .status-active { color: var(--dark-green); font-weight: bold; }
+    .status-expired { color: var(--steel); }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    #msg { min-height: 1.2em; margin-bottom: 12px; font-size: 0.9rem; }
+    .error { color: var(--brick); }
+  </style>
+</head>
+<body>
+  <h1>QR Admin Dashboard</h1>
+
+  <div id="loginBox">
+    <p>Enter admin password to continue.</p>
+    <input type="password" id="passwordInput" placeholder="Admin password" />
+    <br />
+    <button id="loginBtn">Login</button>
+    <div id="loginMsg" style="margin-top:10px;"></div>
+  </div>
+
+  <div id="dashboard">
+    <div class="toolbar">
+      <span id="countLabel"></span>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+    <div id="msg"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>QR Number</th>
+          <th>Issued At</th>
+          <th>Expires At</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // ----- Config (must match index.html) -----
+    var VALID_HOURS = 12;
+    var VALID_MS = VALID_HOURS * 60 * 60 * 1000;
+    var JSONBIN_BIN_ID = "YOUR_BIN_ID_HERE";
+    var JSONBIN_ACCESS_KEY = "YOUR_ACCESS_KEY_HERE";
+    var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
+
+    // SHA-256 hash of the admin password (default password: Awareness2026!).
+    // This is a client-side convenience gate only - NOT real security, since
+    // this file and the jsonbin access key are visible to anyone who views
+    // the page source. Change ADMIN_PASSWORD_SHA256 to your own hash (e.g.
+    // via `crypto.subtle.digest` in a browser console) before relying on it.
+    var ADMIN_PASSWORD_SHA256 = "ae8c800425c33b595de81dc2b08f7a976422953d79a6f4803e822c236955385d";
+
+    var loginBox = document.getElementById("loginBox");
+    var dashboard = document.getElementById("dashboard");
+    var passwordInput = document.getElementById("passwordInput");
+    var loginBtn = document.getElementById("loginBtn");
+    var loginMsg = document.getElementById("loginMsg");
+    var refreshBtn = document.getElementById("refreshBtn");
+    var tableBody = document.getElementById("tableBody");
+    var msgEl = document.getElementById("msg");
+    var countLabel = document.getElementById("countLabel");
+
+    async function sha256Hex(text) {
+      var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    }
+
+    async function fetchAllRecords() {
+      var res = await fetch(JSONBIN_BASE + "/latest", {
+        headers: { "X-Access-Key": JSONBIN_ACCESS_KEY, "X-Bin-Meta": "false" },
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error("Unable to reach shared store");
+      var data = await res.json();
+      return Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+    }
+
+    async function saveAllRecords(records) {
+      var res = await fetch(JSONBIN_BASE, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Access-Key": JSONBIN_ACCESS_KEY
+        },
+        body: JSON.stringify(records)
+      });
+      if (!res.ok) throw new Error("Unable to save to shared store");
+    }
+
+    function formatDateTime(ms) {
+      return new Date(ms).toLocaleString();
+    }
+
+    async function renderTable() {
+      msgEl.textContent = "Loading...";
+      msgEl.classList.remove("error");
+      try {
+        var records = await fetchAllRecords();
+        var now = Date.now();
+        records.sort(function (a, b) { return b.issuedAt - a.issuedAt; });
+        tableBody.innerHTML = "";
+        records.forEach(function (r) {
+          var expiresAt = r.issuedAt + VALID_MS;
+          var isActive = expiresAt > now;
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + String(r.number).padStart(4, "0") + "</td>" +
+            "<td>" + formatDateTime(r.issuedAt) + "</td>" +
+            "<td>" + formatDateTime(expiresAt) + "</td>" +
+            "<td class='" + (isActive ? "status-active" : "status-expired") + "'>" +
+              (isActive ? "Active" : "Expired") + "</td>" +
+            "<td><button class='danger' data-device='" + r.deviceId + "'>Delete</button></td>";
+          tableBody.appendChild(tr);
+        });
+        countLabel.textContent = records.length + " total code(s)";
+        msgEl.textContent = "";
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = "Could not load data from the shared store.";
+        msgEl.classList.add("error");
+      }
+    }
+
+    async function handleDelete(deviceId) {
+      msgEl.textContent = "Deleting...";
+      msgEl.classList.remove("error");
+      try {
+        var records = await fetchAllRecords();
+        var remaining = records.filter(function (r) { return r.deviceId !== deviceId; });
+        await saveAllRecords(remaining);
+        await renderTable();
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = "Could not delete this code.";
+        msgEl.classList.add("error");
+      }
+    }
+
+    tableBody.addEventListener("click", function (e) {
+      if (e.target.matches("button[data-device]")) {
+        if (confirm("Delete this QR code? The user will be able to generate a new one.")) {
+          handleDelete(e.target.getAttribute("data-device"));
+        }
+      }
+    });
+
+    refreshBtn.addEventListener("click", renderTable);
+
+    async function handleLogin() {
+      var hash = await sha256Hex(passwordInput.value);
+      if (hash === ADMIN_PASSWORD_SHA256) {
+        loginBox.style.display = "none";
+        dashboard.style.display = "block";
+        sessionStorage.setItem("qrAdminAuthed", "1");
+        renderTable();
+      } else {
+        loginMsg.textContent = "Incorrect password.";
+        loginMsg.classList.add("error");
+      }
+    }
+
+    loginBtn.addEventListener("click", handleLogin);
+    passwordInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") handleLogin();
+    });
+
+    if (sessionStorage.getItem("qrAdminAuthed") === "1") {
+      loginBox.style.display = "none";
+      dashboard.style.display = "block";
+      renderTable();
+    }
+  </script>
+</body>
+</html>

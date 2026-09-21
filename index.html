@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your Unique QR Code</title>
+  <title>India Cybersecurity Awareness Month 2026</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -32,9 +32,22 @@
       background-attachment: fixed;
       color: var(--sync-gold-20);
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
       padding: 20px;
+    }
+    .site-header {
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      margin: 10px 0 24px;
+    }
+    .site-header h1 {
+      color: var(--sync-gold);
+      font-size: 1.6rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin: 0;
     }
     .card {
       max-width: 420px;
@@ -45,8 +58,9 @@
       padding: 32px 24px;
       text-align: center;
       box-shadow: 6px 6px 0 var(--charcoal-dark);
+      margin: auto;
     }
-    h1 {
+    h2 {
       margin: 0 0 8px;
       color: var(--sync-gold);
       letter-spacing: 1px;
@@ -117,9 +131,13 @@
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <h1>India Cybersecurity Awareness Month 2026</h1>
+  </header>
+
   <div class="card">
-    <h1>Your Personal QR Code</h1>
-    <p class="sub">Click the button to generate your unique numbered QR code. It stays valid on this device for 12 hours.</p>
+    <h2>Your Personal QR Code</h2>
+    <p class="sub">Click the button to generate your unique 4-digit QR code. It stays valid on this device for 12 hours.</p>
 
     <div id="qrBox"><span id="qrCode"></span></div>
     <div id="qrNumber"></div>
@@ -134,6 +152,16 @@
     var VALID_HOURS = 12;
     var VALID_MS = VALID_HOURS * 60 * 60 * 1000;
     var STORAGE_KEY = "syncAwarenessQrData";
+    var DEVICE_KEY = "syncAwarenessDeviceId";
+
+    // Shared cloud store (jsonbin.io) so the admin page can see/delete
+    // codes from every device. Use a bin-scoped Access Key with only
+    // Read+Update permissions (NOT the account Master Key) - this key is
+    // visible to anyone who views page source, so it must not grant
+    // account-wide or delete access.
+    var JSONBIN_BIN_ID = "YOUR_BIN_ID_HERE";
+    var JSONBIN_ACCESS_KEY = "YOUR_ACCESS_KEY_HERE";
+    var JSONBIN_BASE = "https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID;
 
     var qrCodeEl = document.getElementById("qrCode");
     var qrNumberEl = document.getElementById("qrNumber");
@@ -143,8 +171,17 @@
     var qrInstance = null;
     var countdownTimer = null;
 
+    function getDeviceId() {
+      var id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    }
+
     function formatNumber(n) {
-      return String(n).padStart(9, "0");
+      return String(n).padStart(4, "0");
     }
 
     function renderQr(number) {
@@ -159,11 +196,11 @@
       qrNumberEl.textContent = formatNumber(number);
     }
 
-    function saveRecord(number, issuedAt) {
+    function saveLocalRecord(number, issuedAt) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ number: number, issuedAt: issuedAt }));
     }
 
-    function loadRecord() {
+    function loadLocalRecord() {
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
         return raw ? JSON.parse(raw) : null;
@@ -174,6 +211,28 @@
 
     function msRemaining(record) {
       return record.issuedAt + VALID_MS - Date.now();
+    }
+
+    async function fetchAllRecords() {
+      var res = await fetch(JSONBIN_BASE + "/latest", {
+        headers: { "X-Access-Key": JSONBIN_ACCESS_KEY, "X-Bin-Meta": "false" },
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error("Unable to reach shared store");
+      var data = await res.json();
+      return Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
+    }
+
+    async function saveAllRecords(records) {
+      var res = await fetch(JSONBIN_BASE, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Access-Key": JSONBIN_ACCESS_KEY
+        },
+        body: JSON.stringify(records)
+      });
+      if (!res.ok) throw new Error("Unable to save to shared store");
     }
 
     function startCountdown(record) {
@@ -202,60 +261,99 @@
         statusEl.classList.remove("error");
       } else {
         btn.disabled = false;
-        statusEl.textContent = "Your previous code expired. Generate a new one.";
+        statusEl.textContent = "Generate a new code.";
         expiresAtEl.textContent = "";
         qrCodeEl.innerHTML = "";
         qrNumberEl.textContent = "";
       }
     }
 
-    // Generates a 9-digit number using the browser's cryptographic RNG.
-    // No backend/API call is required, so the page stays fully static and
-    // free to host. Collision odds across devices are astronomically low
-    // (~1 in 900 million), and each device only ever holds one active code
-    // at a time thanks to the 12-hour localStorage lock below.
-    function generateUniqueNumber() {
-      var buf = new Uint32Array(1);
-      window.crypto.getRandomValues(buf);
-      return 100000000 + (buf[0] % 900000000);
+    // Checks the shared store to see if this device's code is still
+    // present (an admin delete removes it here, unlocking generation
+    // early even if the 12h window hasn't elapsed).
+    async function findRemoteRecordForDevice(deviceId) {
+      var all = await fetchAllRecords();
+      var now = Date.now();
+      var active = all.filter(function (r) { return r.issuedAt + VALID_MS > now; });
+      return active.find(function (r) { return r.deviceId === deviceId; }) || null;
     }
 
-    function handleGenerate() {
-      var existing = loadRecord();
-      if (existing && msRemaining(existing) > 0) {
-        renderQr(existing.number);
-        startCountdown(existing);
-        lockToState({ active: true });
-        return;
+    function randomFourDigit() {
+      var buf = new Uint32Array(1);
+      window.crypto.getRandomValues(buf);
+      return buf[0] % 10000;
+    }
+
+    function generateUniqueNumber(activeNumbers) {
+      var used = new Set(activeNumbers.map(function (r) { return r.number; }));
+      // Only 10,000 possible 4-digit codes; retry until a free one is found.
+      for (var i = 0; i < 200; i++) {
+        var candidate = randomFourDigit();
+        if (!used.has(candidate)) return candidate;
       }
+      throw new Error("No available codes left");
+    }
+
+    async function handleGenerate() {
+      var deviceId = getDeviceId();
 
       btn.disabled = true;
-      statusEl.textContent = "Generating your unique code...";
+      statusEl.textContent = "Checking your device status...";
       statusEl.classList.remove("error");
 
       try {
-        var number = generateUniqueNumber();
-        var issuedAt = Date.now();
-        saveRecord(number, issuedAt);
+        var all = await fetchAllRecords();
+        var now = Date.now();
+        var active = all.filter(function (r) { return r.issuedAt + VALID_MS > now; });
+        var mine = active.find(function (r) { return r.deviceId === deviceId; });
+
+        if (mine) {
+          saveLocalRecord(mine.number, mine.issuedAt);
+          renderQr(mine.number);
+          startCountdown(mine);
+          lockToState({ active: true });
+          return;
+        }
+
+        // Not active remotely (never generated, expired, or admin-deleted).
+        statusEl.textContent = "Generating your unique code...";
+        var number = generateUniqueNumber(active);
+        var issuedAt = now;
+        var record = { number: number, issuedAt: issuedAt, deviceId: deviceId };
+
+        var pruned = active.concat([record]); // drop expired entries, keep active + new
+        await saveAllRecords(pruned);
+
+        saveLocalRecord(number, issuedAt);
         renderQr(number);
-        var record = { number: number, issuedAt: issuedAt };
         startCountdown(record);
         lockToState({ active: true });
       } catch (err) {
+        console.error(err);
         statusEl.textContent = "Could not generate a code. Please try again.";
         statusEl.classList.add("error");
         btn.disabled = false;
       }
     }
 
-    function init() {
-      var existing = loadRecord();
-      if (existing && msRemaining(existing) > 0) {
-        renderQr(existing.number);
-        startCountdown(existing);
+    async function init() {
+      var deviceId = getDeviceId();
+      var local = loadLocalRecord();
+      if (local && msRemaining(local) > 0) {
+        // Optimistically show the locally cached code, then confirm
+        // against the shared store in case an admin deleted it.
+        renderQr(local.number);
+        startCountdown(local);
         lockToState({ active: true });
-      } else {
-        statusEl.textContent = "";
+      }
+      try {
+        var remote = await findRemoteRecordForDevice(deviceId);
+        if (!remote) {
+          if (countdownTimer) clearInterval(countdownTimer);
+          lockToState({ active: false });
+        }
+      } catch (err) {
+        console.warn("Could not verify remote status:", err);
       }
     }
 
