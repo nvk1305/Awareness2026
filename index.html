@@ -145,6 +145,7 @@
 
     <button id="generateBtn">Generate My QR Code</button>
     <div id="expiresAt"></div>
+    <div id="debugInfo" style="margin-top:10px;font-size:0.65rem;color:var(--steel);word-break:break-all;"></div>
   </div>
 
   <script>
@@ -334,6 +335,10 @@
 
     async function init() {
       var deviceId = getDeviceId();
+      var debugEl = document.getElementById("debugInfo");
+      if (debugEl) {
+        debugEl.textContent = "Device ID: " + deviceId + " | localStorage available: " + (typeof Storage !== "undefined");
+      }
       var local = loadLocalRecord();
       if (local && msRemaining(local) > 0) {
         // Optimistically show the locally cached code, then confirm
