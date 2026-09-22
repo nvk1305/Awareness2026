@@ -301,7 +301,8 @@
     function randomFourDigit() {
       var buf = new Uint32Array(1);
       window.crypto.getRandomValues(buf);
-      return buf[0] % 10000;
+     // Range 1000-9999 only - no leading zero as the first digit.
+      return 1000 + (buf[0] % 9000);
     }
 
     function generateUniqueNumber(activeNumbers) {
