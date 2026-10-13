@@ -120,6 +120,17 @@
     button:not(:disabled):hover {
       transform: translateY(-2px);
     }
+    #saveBtn {
+      display: none;
+      margin: 12px auto 16px;
+      padding: 12px 24px;
+      font-size: 0.95rem;
+      background: var(--sync-gold);
+      color: var(--charcoal-dark);
+    }
+    #saveBtn:hover:not(:disabled) {
+      background: var(--sync-gold-70);
+    }
     #expiresAt {
       margin-top: 14px;
       font-size: 0.8rem;
@@ -147,6 +158,7 @@
 
     <div id="qrBox"><span id="qrCode"></span></div>
     <div id="qrNumber"></div>
+    <button id="saveBtn" type="button">Save QR Code</button>
     <div id="statusMsg"></div>
 
     <button id="generateBtn">Generate My QR Code</button>
@@ -169,11 +181,13 @@
 
     var qrCodeEl = document.getElementById("qrCode");
     var qrNumberEl = document.getElementById("qrNumber");
+    var saveBtn = document.getElementById("saveBtn");
     var statusEl = document.getElementById("statusMsg");
     var btn = document.getElementById("generateBtn");
     var expiresAtEl = document.getElementById("expiresAt");
     var qrInstance = null;
     var countdownTimer = null;
+    var currentQrNumber = null;
 
     // Returns null if localStorage is unavailable/blocked (e.g. iOS Safari
     // "Block All Cookies", which also disables Web Storage in WebKit).
@@ -206,6 +220,7 @@
     }
 
     function renderQr(number) {
+      currentQrNumber = number;
       qrCodeEl.innerHTML = "";
       qrInstance = new QRCode(qrCodeEl, {
         text: String(number),
@@ -277,14 +292,17 @@
     function lockToState(opts) {
       if (opts.active) {
         btn.disabled = true;
+        saveBtn.style.display = "inline-block";
         statusEl.textContent = "This QR code is already active on your device.";
         statusEl.classList.remove("error");
       } else {
         btn.disabled = false;
+        saveBtn.style.display = "none";
         statusEl.textContent = "Generate a new code.";
         expiresAtEl.textContent = "";
         qrCodeEl.innerHTML = "";
         qrNumberEl.textContent = "";
+        currentQrNumber = null;
       }
     }
 
@@ -360,6 +378,193 @@
       }
     }
 
+    function getQrDrawable() {
+      return new Promise(function (resolve, reject) {
+        var canvas = qrCodeEl.querySelector("canvas");
+        if (canvas && canvas.width > 0) {
+          resolve(canvas);
+          return;
+        }
+        var img = qrCodeEl.querySelector("img");
+        if (img && img.src) {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve(img);
+          } else {
+            var tempImg = new Image();
+            tempImg.onload = function () { resolve(tempImg); };
+            tempImg.onerror = function () { reject(new Error("QR image failed to load")); };
+            tempImg.src = img.src;
+          }
+          return;
+        }
+        reject(new Error("No QR code found to save"));
+      });
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 3000);
+    }
+
+    function exportCanvasImage(canvas, filename) {
+      return new Promise(function (resolve, reject) {
+        if (!canvas.toBlob) {
+          try {
+            var dataUrl = canvas.toDataURL("image/png");
+            var a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+          return;
+        }
+
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            reject(new Error("Failed to create image blob"));
+            return;
+          }
+
+          if (
+            navigator.share &&
+            navigator.canShare &&
+            /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+          ) {
+            var file = new File([blob], filename, { type: "image/png" });
+            if (navigator.canShare({ files: [file] })) {
+              navigator
+                .share({
+                  files: [file],
+                  title: "Cybersecurity Awareness 2026 QR",
+                  text: "Registration QR Code: " + filename.replace(".png", "")
+                })
+                .then(resolve)
+                .catch(function (err) {
+                  if (err.name === "AbortError") {
+                    resolve();
+                  } else {
+                    triggerBlobDownload(blob, filename);
+                    resolve();
+                  }
+                });
+              return;
+            }
+          }
+
+          triggerBlobDownload(blob, filename);
+          resolve();
+        }, "image/png");
+      });
+    }
+
+    async function handleSaveQr() {
+      var num = currentQrNumber;
+      if (!num) {
+        var local = loadLocalRecord();
+        if (local && local.number) num = local.number;
+      }
+      if (!num) return;
+
+      var originalText = saveBtn.textContent;
+      saveBtn.textContent = "Saving...";
+      saveBtn.disabled = true;
+
+      try {
+        var qrDrawable = await getQrDrawable();
+        var numFormatted = formatNumber(num);
+
+        var canvas = document.createElement("canvas");
+        var width = 480;
+        var height = 560;
+        canvas.width = width;
+        canvas.height = height;
+        var ctx = canvas.getContext("2d");
+
+        // 1. Background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Header banner
+        ctx.fillStyle = "#272825";
+        ctx.fillRect(0, 0, width, 60);
+
+        ctx.fillStyle = "#f2bf00";
+        ctx.fillRect(0, 57, width, 3);
+
+        ctx.fillStyle = "#f2bf00";
+        ctx.font = 'bold 15px "Courier New", monospace';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("INDIA CYBERSECURITY AWARENESS 2026", width / 2, 30);
+
+        // 3. QR code drawn in center
+        var qrSize = 250;
+        var qrX = (width - qrSize) / 2;
+        var qrY = 85;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(qrDrawable, qrX, qrY, qrSize, qrSize);
+
+        // 4. Number below the QR
+        ctx.fillStyle = "#717477";
+        ctx.font = 'bold 13px "Courier New", monospace';
+        ctx.fillText("REGISTRATION CODE", width / 2, 375);
+
+        ctx.fillStyle = "#272825";
+        ctx.font = 'bold 44px "Courier New", monospace';
+        ctx.fillText(numFormatted, width / 2, 420);
+
+        // 5. Divider line
+        ctx.strokeStyle = "#e4e4e4";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(50, 455);
+        ctx.lineTo(width - 50, 455);
+        ctx.stroke();
+
+        // 6. Subtext / Instructions
+        ctx.fillStyle = "#474844";
+        ctx.font = '13px "Courier New", monospace';
+        ctx.fillText("Show at registration desk", width / 2, 482);
+
+        ctx.fillStyle = "#9da0a4";
+        ctx.font = '12px "Courier New", monospace';
+        ctx.fillText("Valid for 12 hours from issuance", width / 2, 508);
+
+        // 7. Outer border
+        ctx.strokeStyle = "#272825";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, width - 4, height - 4);
+
+        var filename = "Cybersecurity-QR-" + numFormatted + ".png";
+        await exportCanvasImage(canvas, filename);
+
+        saveBtn.textContent = "Saved!";
+        setTimeout(function () {
+          saveBtn.textContent = originalText;
+          saveBtn.disabled = false;
+        }, 2000);
+      } catch (err) {
+        console.error("Save QR failed:", err);
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+        statusEl.textContent = "Could not save image. Please take a screenshot.";
+        statusEl.classList.add("error");
+      }
+    }
+
     async function init() {
       if (!isStorageAvailable()) {
         document.getElementById("storageWarning").style.display = "block";
@@ -387,6 +592,7 @@
     }
 
     btn.addEventListener("click", handleGenerate);
+    saveBtn.addEventListener("click", handleSaveQr);
     init();
   </script>
 </body>
