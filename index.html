@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>India Cybersecurity Awareness Month 2026</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
@@ -301,9 +304,9 @@
         <span class="modal-code-label">REGISTRATION CODE</span>
         <span id="modalQrNumber" class="modal-code-num"></span>
       </div>
-      <div id="modalPreviewBox" style="display:none; margin: 0 auto 16px; max-width: 170px;">
-        <img id="modalPreviewImg" alt="QR Pass Preview" style="width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--steel); display: block;" />
-        <span style="font-size: 0.72rem; color: var(--steel); display: block; margin-top: 4px;">Tap &amp; hold to save to Photos</span>
+      <div id="modalPreviewBox" style="display:none; margin: 0 auto 14px; max-width: 175px;">
+        <img id="modalPreviewImg" alt="QR Pass Preview" style="width: 100%; height: auto; border-radius: 8px; border: 2px solid var(--sync-gold); display: block;" />
+        <span id="mobileTip" style="font-size: 0.74rem; color: var(--sync-gold-20); display: block; margin-top: 6px; line-height: 1.3;">Tap &amp; hold image to save to Photos</span>
       </div>
       <button id="modalDownloadBtn" class="modal-download-btn" type="button">⬇ Download to Gallery</button>
       <button id="modalCloseBtn" class="modal-dismiss-btn" type="button">Done</button>
@@ -334,6 +337,7 @@
     var modalQrNumber = document.getElementById("modalQrNumber");
     var modalPreviewBox = document.getElementById("modalPreviewBox");
     var modalPreviewImg = document.getElementById("modalPreviewImg");
+    var mobileTip = document.getElementById("mobileTip");
     var modalDownloadBtn = document.getElementById("modalDownloadBtn");
     var modalCloseBtn = document.getElementById("modalCloseBtn");
     var modalCloseX = document.getElementById("modalCloseX");
@@ -559,14 +563,15 @@
     function triggerBlobDownload(blob, filename) {
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
+      a.style.display = "none";
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       setTimeout(function () {
-        document.body.removeChild(a);
+        if (a.parentNode) a.parentNode.removeChild(a);
         URL.revokeObjectURL(url);
-      }, 3000);
+      }, 5000);
     }
 
     function exportCanvasImage(canvas, filename) {
@@ -575,11 +580,14 @@
           try {
             var dataUrl = canvas.toDataURL("image/png");
             var a = document.createElement("a");
+            a.style.display = "none";
             a.href = dataUrl;
             a.download = filename;
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            setTimeout(function () {
+              if (a.parentNode) a.parentNode.removeChild(a);
+            }, 5000);
             resolve();
           } catch (e) {
             reject(e);
@@ -599,6 +607,75 @@
       });
     }
 
+    async function buildQrCanvas(number) {
+      var qrDrawable = await getQrDrawable();
+      var numFormatted = formatNumber(number);
+
+      var canvas = document.createElement("canvas");
+      var width = 480;
+      var height = 560;
+      canvas.width = width;
+      canvas.height = height;
+      var ctx = canvas.getContext("2d");
+
+      // 1. Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      // 2. Header banner
+      ctx.fillStyle = "#272825";
+      ctx.fillRect(0, 0, width, 60);
+
+      ctx.fillStyle = "#f2bf00";
+      ctx.fillRect(0, 57, width, 3);
+
+      ctx.fillStyle = "#f2bf00";
+      ctx.font = 'bold 15px "Courier New", monospace';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("INDIA CYBERSECURITY AWARENESS 2026", width / 2, 30);
+
+      // 3. QR code drawn in center
+      var qrSize = 250;
+      var qrX = (width - qrSize) / 2;
+      var qrY = 85;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(qrDrawable, qrX, qrY, qrSize, qrSize);
+
+      // 4. Number below the QR
+      ctx.fillStyle = "#717477";
+      ctx.font = 'bold 13px "Courier New", monospace';
+      ctx.fillText("REGISTRATION CODE", width / 2, 375);
+
+      ctx.fillStyle = "#272825";
+      ctx.font = 'bold 44px "Courier New", monospace';
+      ctx.fillText(numFormatted, width / 2, 420);
+
+      // 5. Divider line
+      ctx.strokeStyle = "#e4e4e4";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(50, 455);
+      ctx.lineTo(width - 50, 455);
+      ctx.stroke();
+
+      // 6. Subtext / Instructions
+      ctx.fillStyle = "#474844";
+      ctx.font = '13px "Courier New", monospace';
+      ctx.fillText("Show at registration desk", width / 2, 482);
+
+      ctx.fillStyle = "#9da0a4";
+      ctx.font = '12px "Courier New", monospace';
+      ctx.fillText("Valid for 12 hours from issuance", width / 2, 508);
+
+      // 7. Outer border
+      ctx.strokeStyle = "#272825";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, width - 4, height - 4);
+
+      return canvas;
+    }
+
     async function handleSaveQr() {
       var num = currentQrNumber;
       if (!num) {
@@ -608,7 +685,6 @@
       if (!num) return;
 
       var origMainText = saveBtn.textContent;
-      var origModalText = modalDownloadBtn ? modalDownloadBtn.textContent : "";
       saveBtn.textContent = "Saving...";
       saveBtn.disabled = true;
       if (modalDownloadBtn) {
@@ -617,81 +693,19 @@
       }
 
       try {
-        var qrDrawable = await getQrDrawable();
-        var numFormatted = formatNumber(num);
-
-        var canvas = document.createElement("canvas");
-        var width = 480;
-        var height = 560;
-        canvas.width = width;
-        canvas.height = height;
-        var ctx = canvas.getContext("2d");
-
-        // 1. Background
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-
-        // 2. Header banner
-        ctx.fillStyle = "#272825";
-        ctx.fillRect(0, 0, width, 60);
-
-        ctx.fillStyle = "#f2bf00";
-        ctx.fillRect(0, 57, width, 3);
-
-        ctx.fillStyle = "#f2bf00";
-        ctx.font = 'bold 15px "Courier New", monospace';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("INDIA CYBERSECURITY AWARENESS 2026", width / 2, 30);
-
-        // 3. QR code drawn in center
-        var qrSize = 250;
-        var qrX = (width - qrSize) / 2;
-        var qrY = 85;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(qrDrawable, qrX, qrY, qrSize, qrSize);
-
-        // 4. Number below the QR
-        ctx.fillStyle = "#717477";
-        ctx.font = 'bold 13px "Courier New", monospace';
-        ctx.fillText("REGISTRATION CODE", width / 2, 375);
-
-        ctx.fillStyle = "#272825";
-        ctx.font = 'bold 44px "Courier New", monospace';
-        ctx.fillText(numFormatted, width / 2, 420);
-
-        // 5. Divider line
-        ctx.strokeStyle = "#e4e4e4";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(50, 455);
-        ctx.lineTo(width - 50, 455);
-        ctx.stroke();
-
-        // 6. Subtext / Instructions
-        ctx.fillStyle = "#474844";
-        ctx.font = '13px "Courier New", monospace';
-        ctx.fillText("Show at registration desk", width / 2, 482);
-
-        ctx.fillStyle = "#9da0a4";
-        ctx.font = '12px "Courier New", monospace';
-        ctx.fillText("Valid for 12 hours from issuance", width / 2, 508);
-
-        // 7. Outer border
-        ctx.strokeStyle = "#272825";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(2, 2, width - 4, height - 4);
+        var canvas = await buildQrCanvas(num);
+        var filename = "Cybersecurity-QR-" + formatNumber(num) + ".png";
+        var dataUrl = canvas.toDataURL("image/png");
 
         if (modalPreviewImg) {
-          modalPreviewImg.src = canvas.toDataURL("image/png");
+          modalPreviewImg.src = dataUrl;
           if (modalPreviewBox) modalPreviewBox.style.display = "block";
         }
 
-        var filename = "Cybersecurity-QR-" + numFormatted + ".png";
         await exportCanvasImage(canvas, filename);
 
         saveBtn.textContent = "Saved!";
-        if (modalDownloadBtn) modalDownloadBtn.textContent = "✓ Downloaded to Gallery!";
+        if (modalDownloadBtn) modalDownloadBtn.textContent = "✓ Saved to Gallery!";
         setTimeout(function () {
           saveBtn.textContent = origMainText;
           saveBtn.disabled = false;
@@ -713,15 +727,33 @@
       }
     }
 
-    function showDownloadModal(number) {
+    async function showDownloadModal(number) {
       modalQrNumber.textContent = formatNumber(number);
       modalDownloadBtn.textContent = "⬇ Download to Gallery";
       modalDownloadBtn.disabled = false;
+
+      if (mobileTip) {
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          mobileTip.innerHTML = "<strong>iPhone:</strong> Tap &amp; hold image &gt; tap <em>Save to Photos</em>";
+        } else {
+          mobileTip.innerHTML = "<strong>Android:</strong> Tap <em>Download to Gallery</em> or hold image to save";
+        }
+      }
+
       downloadModal.style.display = "flex";
-      // Automatically attempt direct download to gallery
-      setTimeout(function () {
-        handleSaveQr();
-      }, 150);
+
+      // Render image preview and trigger direct download
+      try {
+        var canvas = await buildQrCanvas(number);
+        var dataUrl = canvas.toDataURL("image/png");
+        if (modalPreviewImg) {
+          modalPreviewImg.src = dataUrl;
+          if (modalPreviewBox) modalPreviewBox.style.display = "block";
+        }
+        await exportCanvasImage(canvas, "Cybersecurity-QR-" + formatNumber(number) + ".png");
+      } catch (err) {
+        console.error("Auto download err:", err);
+      }
     }
 
     function closeDownloadModal() {
