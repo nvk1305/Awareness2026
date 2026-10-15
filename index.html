@@ -139,6 +139,131 @@
     .error {
       color: var(--brick);
     }
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 15, 14, 0.85);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+      animation: fadeIn 150ms ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-card {
+      position: relative;
+      background: rgba(39, 40, 37, 0.98);
+      border: 2px solid var(--sync-gold);
+      border-radius: 14px;
+      padding: 28px 22px 24px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 6px 6px 0 var(--charcoal-dark);
+      animation: slideUp 180ms ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: var(--steel);
+      font-size: 1.6rem;
+      line-height: 1;
+      padding: 4px 8px;
+      cursor: pointer;
+      box-shadow: none;
+    }
+    .modal-close:hover {
+      color: var(--sync-gold);
+      transform: none;
+    }
+    .modal-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(242, 191, 0, 0.15);
+      border: 2px solid var(--sync-gold);
+      color: var(--sync-gold);
+      font-size: 1.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+    }
+    .modal-card h3 {
+      margin: 0 0 8px;
+      color: var(--sync-gold);
+      font-size: 1.3rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .modal-desc {
+      color: var(--sync-gold-20);
+      font-size: 0.88rem;
+      line-height: 1.4;
+      margin: 0 0 16px;
+    }
+    .modal-code-box {
+      background: var(--charcoal-dark);
+      border: 1px dashed var(--steel);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+    }
+    .modal-code-label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--steel);
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .modal-code-num {
+      display: block;
+      font-size: 1.6rem;
+      font-weight: bold;
+      letter-spacing: 4px;
+      color: var(--sync-gold);
+    }
+    .modal-download-btn {
+      width: 100%;
+      margin-bottom: 10px;
+      background: var(--sync-gold);
+      color: var(--charcoal-dark);
+      padding: 14px 20px;
+      font-size: 1rem;
+    }
+    .modal-download-btn:hover:not(:disabled) {
+      background: var(--sync-gold-70);
+    }
+    .modal-dismiss-btn {
+      width: 100%;
+      background: transparent;
+      color: var(--steel);
+      border: 1px solid var(--steel);
+      box-shadow: none;
+      padding: 10px 20px;
+      font-size: 0.85rem;
+    }
+    .modal-dismiss-btn:hover {
+      background: rgba(157, 160, 164, 0.15);
+      color: var(--sync-gold-20);
+      transform: none;
+    }
   </style>
 </head>
 <body>
@@ -165,6 +290,22 @@
     <div id="expiresAt"></div>
   </div>
 
+  <!-- Download Modal Popup -->
+  <div id="downloadModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <button id="modalCloseX" class="modal-close" aria-label="Close" type="button">&times;</button>
+      <div class="modal-icon">&#10003;</div>
+      <h3>QR Code Ready!</h3>
+      <p class="modal-desc">Your unique registration QR code has been generated. Download it to show at the registration desk.</p>
+      <div class="modal-code-box">
+        <span class="modal-code-label">REGISTRATION CODE</span>
+        <span id="modalQrNumber" class="modal-code-num"></span>
+      </div>
+      <button id="modalDownloadBtn" class="modal-download-btn" type="button">⬇ Download QR Code</button>
+      <button id="modalCloseBtn" class="modal-dismiss-btn" type="button">Done</button>
+    </div>
+  </div>
+
   <script>
     // ----- Config -----
     var VALID_HOURS = 12;
@@ -185,6 +326,11 @@
     var statusEl = document.getElementById("statusMsg");
     var btn = document.getElementById("generateBtn");
     var expiresAtEl = document.getElementById("expiresAt");
+    var downloadModal = document.getElementById("downloadModal");
+    var modalQrNumber = document.getElementById("modalQrNumber");
+    var modalDownloadBtn = document.getElementById("modalDownloadBtn");
+    var modalCloseBtn = document.getElementById("modalCloseBtn");
+    var modalCloseX = document.getElementById("modalCloseX");
     var qrInstance = null;
     var countdownTimer = null;
     var currentQrNumber = null;
@@ -303,6 +449,7 @@
         qrCodeEl.innerHTML = "";
         qrNumberEl.textContent = "";
         currentQrNumber = null;
+        closeDownloadModal();
       }
     }
 
@@ -355,6 +502,7 @@
           renderQr(mine.number);
           startCountdown(mine);
           lockToState({ active: true });
+          showDownloadModal(mine.number);
           return;
         }
 
@@ -370,6 +518,7 @@
         renderQr(number);
         startCountdown(record);
         lockToState({ active: true });
+        showDownloadModal(number);
       } catch (err) {
         console.error(err);
         statusEl.textContent = "Could not generate a code. Please try again.";
@@ -478,9 +627,14 @@
       }
       if (!num) return;
 
-      var originalText = saveBtn.textContent;
+      var origMainText = saveBtn.textContent;
+      var origModalText = modalDownloadBtn ? modalDownloadBtn.textContent : "";
       saveBtn.textContent = "Saving...";
       saveBtn.disabled = true;
+      if (modalDownloadBtn) {
+        modalDownloadBtn.textContent = "Saving...";
+        modalDownloadBtn.disabled = true;
+      }
 
       try {
         var qrDrawable = await getQrDrawable();
@@ -552,17 +706,41 @@
         await exportCanvasImage(canvas, filename);
 
         saveBtn.textContent = "Saved!";
+        if (modalDownloadBtn) modalDownloadBtn.textContent = "✓ Downloaded!";
         setTimeout(function () {
-          saveBtn.textContent = originalText;
+          saveBtn.textContent = origMainText;
           saveBtn.disabled = false;
+          if (modalDownloadBtn) {
+            modalDownloadBtn.textContent = "⬇ Download QR Code";
+            modalDownloadBtn.disabled = false;
+          }
         }, 2000);
       } catch (err) {
         console.error("Save QR failed:", err);
-        saveBtn.textContent = originalText;
+        saveBtn.textContent = origMainText;
         saveBtn.disabled = false;
+        if (modalDownloadBtn) {
+          modalDownloadBtn.textContent = "⬇ Download QR Code";
+          modalDownloadBtn.disabled = false;
+        }
         statusEl.textContent = "Could not save image. Please take a screenshot.";
         statusEl.classList.add("error");
       }
+    }
+
+    function showDownloadModal(number) {
+      modalQrNumber.textContent = formatNumber(number);
+      modalDownloadBtn.textContent = "⬇ Download QR Code";
+      modalDownloadBtn.disabled = false;
+      downloadModal.style.display = "flex";
+      // Automatically attempt direct download
+      setTimeout(function () {
+        handleSaveQr();
+      }, 150);
+    }
+
+    function closeDownloadModal() {
+      downloadModal.style.display = "none";
     }
 
     async function init() {
@@ -593,6 +771,17 @@
 
     btn.addEventListener("click", handleGenerate);
     saveBtn.addEventListener("click", handleSaveQr);
+    modalDownloadBtn.addEventListener("click", handleSaveQr);
+    modalCloseBtn.addEventListener("click", closeDownloadModal);
+    modalCloseX.addEventListener("click", closeDownloadModal);
+    downloadModal.addEventListener("click", function (e) {
+      if (e.target === downloadModal) closeDownloadModal();
+    });
+    window.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && downloadModal.style.display === "flex") {
+        closeDownloadModal();
+      }
+    });
     init();
   </script>
 </body>
