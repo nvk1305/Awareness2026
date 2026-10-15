@@ -296,12 +296,16 @@
       <button id="modalCloseX" class="modal-close" aria-label="Close" type="button">&times;</button>
       <div class="modal-icon">&#10003;</div>
       <h3>QR Code Ready!</h3>
-      <p class="modal-desc">Your unique registration QR code has been generated. Download it to show at the registration desk.</p>
+      <p class="modal-desc">Your unique registration QR code is ready. Download it directly to your gallery.</p>
       <div class="modal-code-box">
         <span class="modal-code-label">REGISTRATION CODE</span>
         <span id="modalQrNumber" class="modal-code-num"></span>
       </div>
-      <button id="modalDownloadBtn" class="modal-download-btn" type="button">⬇ Download QR Code</button>
+      <div id="modalPreviewBox" style="display:none; margin: 0 auto 16px; max-width: 170px;">
+        <img id="modalPreviewImg" alt="QR Pass Preview" style="width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--steel); display: block;" />
+        <span style="font-size: 0.72rem; color: var(--steel); display: block; margin-top: 4px;">Tap &amp; hold to save to Photos</span>
+      </div>
+      <button id="modalDownloadBtn" class="modal-download-btn" type="button">⬇ Download to Gallery</button>
       <button id="modalCloseBtn" class="modal-dismiss-btn" type="button">Done</button>
     </div>
   </div>
@@ -328,6 +332,8 @@
     var expiresAtEl = document.getElementById("expiresAt");
     var downloadModal = document.getElementById("downloadModal");
     var modalQrNumber = document.getElementById("modalQrNumber");
+    var modalPreviewBox = document.getElementById("modalPreviewBox");
+    var modalPreviewImg = document.getElementById("modalPreviewImg");
     var modalDownloadBtn = document.getElementById("modalDownloadBtn");
     var modalCloseBtn = document.getElementById("modalCloseBtn");
     var modalCloseX = document.getElementById("modalCloseX");
@@ -587,32 +593,6 @@
             return;
           }
 
-          if (
-            navigator.share &&
-            navigator.canShare &&
-            /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
-          ) {
-            var file = new File([blob], filename, { type: "image/png" });
-            if (navigator.canShare({ files: [file] })) {
-              navigator
-                .share({
-                  files: [file],
-                  title: "Cybersecurity Awareness 2026 QR",
-                  text: "Registration QR Code: " + filename.replace(".png", "")
-                })
-                .then(resolve)
-                .catch(function (err) {
-                  if (err.name === "AbortError") {
-                    resolve();
-                  } else {
-                    triggerBlobDownload(blob, filename);
-                    resolve();
-                  }
-                });
-              return;
-            }
-          }
-
           triggerBlobDownload(blob, filename);
           resolve();
         }, "image/png");
@@ -702,16 +682,21 @@
         ctx.lineWidth = 4;
         ctx.strokeRect(2, 2, width - 4, height - 4);
 
+        if (modalPreviewImg) {
+          modalPreviewImg.src = canvas.toDataURL("image/png");
+          if (modalPreviewBox) modalPreviewBox.style.display = "block";
+        }
+
         var filename = "Cybersecurity-QR-" + numFormatted + ".png";
         await exportCanvasImage(canvas, filename);
 
         saveBtn.textContent = "Saved!";
-        if (modalDownloadBtn) modalDownloadBtn.textContent = "✓ Downloaded!";
+        if (modalDownloadBtn) modalDownloadBtn.textContent = "✓ Downloaded to Gallery!";
         setTimeout(function () {
           saveBtn.textContent = origMainText;
           saveBtn.disabled = false;
           if (modalDownloadBtn) {
-            modalDownloadBtn.textContent = "⬇ Download QR Code";
+            modalDownloadBtn.textContent = "⬇ Download to Gallery";
             modalDownloadBtn.disabled = false;
           }
         }, 2000);
@@ -720,7 +705,7 @@
         saveBtn.textContent = origMainText;
         saveBtn.disabled = false;
         if (modalDownloadBtn) {
-          modalDownloadBtn.textContent = "⬇ Download QR Code";
+          modalDownloadBtn.textContent = "⬇ Download to Gallery";
           modalDownloadBtn.disabled = false;
         }
         statusEl.textContent = "Could not save image. Please take a screenshot.";
@@ -730,10 +715,10 @@
 
     function showDownloadModal(number) {
       modalQrNumber.textContent = formatNumber(number);
-      modalDownloadBtn.textContent = "⬇ Download QR Code";
+      modalDownloadBtn.textContent = "⬇ Download to Gallery";
       modalDownloadBtn.disabled = false;
       downloadModal.style.display = "flex";
-      // Automatically attempt direct download
+      // Automatically attempt direct download to gallery
       setTimeout(function () {
         handleSaveQr();
       }, 150);
